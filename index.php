@@ -1,26 +1,18 @@
 <?php
-$sensorIds = [54376];
-//54565
-//google maps api key
+require_once ("config.php");
+
+$sensorIds = [12308,14876,62610,24259,42196];
+
+try {
+    $db = new PDO("mysql:host=$hostname;dbname=$dbname", $username, $password);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+}catch (PDOException $e){
+    throw new PDOException($e);
+}
+
 $apiKey = "AIzaSyArgBywlIsUtMoLJmia5jZckXkkv362HZU";
-
-
-// ruzova dolina
-//$url = "https://data.sensor.community/airrohr/v1/sensor/12308/";
-// cerveny most
-//$url = "https://data.sensor.community/airrohr/v1/sensor/14876/";
-// narcisova
-//$url = "https://data.sensor.community/airrohr/v1/sensor/62610/";
-// bardonovo
-//$url = "https://data.sensor.community/airrohr/v1/sensor/24259/";
-// partizan
-//$url = "https://data.sensor.community/airrohr/v1/sensor/42196/";
-
-
-
 foreach ($sensorIds as $sensorId) {
     $url = "https://data.sensor.community/airrohr/v1/sensor/" . $sensorId . "/";
-    echo $sensorId . "<br>";
     $sensorData = file_get_contents($url);
     $sensorData = json_decode($sensorData);
 
@@ -41,54 +33,69 @@ foreach ($sensorIds as $sensorId) {
     $country = null;
 
     $sensorsTypes = getSensorTypes($sensorId, $sensorData[0]->location->latitude, $sensorData[0]->location->longitude);
-    foreach ($sensorsTypes as $sensorType) {
-        echo "<br>" . $sensorType["type"]. "<br>";
-        $url = "https://data.sensor.community/airrohr/v1/sensor/" . $sensorType["id"] . "/";
-        $sensorData = file_get_contents($url);
-        $sensorData = json_decode($sensorData);
-
-        if ($sensorType["type"] === "SDS011") {
-            $location = parseFormattedAddress($locationData->results[0]->formatted_address);
-            $address=$location["address"];
-            $city=$location["city"];
-            $country=$location["country"];
-            $timestamp = $sensorData[0]->timestamp;
-            $latitude = $sensorData[0]->location->latitude;
-            $longitude = $sensorData[0]->location->longitude;
-            $pm25 = $sensorData[0]->sensordatavalues[1]->value;
-            $pm100 = $sensorData[0]->sensordatavalues[0]->value;
-        } else if ($sensorType["type"] === "DHT22") {
-            $temperature = $sensorData[0]->sensordatavalues[0]->value;
-            $humidity = $sensorData[0]->sensordatavalues[1]->value;
-        } else if ($sensorType["type"] === "BMP280"){
-            var_dump($sensorData);
-            $temperature = $sensorData[0]->sensordatavalues[1]->value;
-            $pressure = number_format($sensorData[0]->sensordatavalues[2]->value / 100, 1);
-            $longitude = $sensorData[0]->location->longitude;
-            $latitude = $sensorData[0]->location->latitude;
-        }else if($sensorType["type"] === "BME280"){
-            $temperature = $sensorData[0]->sensordatavalues[0]->value;
-            $humidity = $sensorData[0]->sensordatavalues[2]->value;
-            $pressure = number_format($sensorData[0]->sensordatavalues[3]->value/ 100, 1);
-        }
+    $sensorMap = createSensorMap($sensorsTypes);
+    if (isset($sensorMap["SDS011"])) {
+        $sensorData = $sensorMap["SDS011"]["data"];
+        $location = parseFormattedAddress($locationData->results[0]->formatted_address);
+        $address=$location["address"];
+        $city=$location["city"];
+        $country=$location["country"];
+        $timestamp = $sensorData[0]->timestamp;
+        $latitude = $sensorData[0]->location->latitude;
+        $longitude = $sensorData[0]->location->longitude;
+        $pm25 = $sensorData[0]->sensordatavalues[1]->value;
+        $pm100 = $sensorData[0]->sensordatavalues[0]->value;
     }
 
+    if (isset($sensorMap["DHT22"])) {
+        $sensorData = $sensorMap["DHT22"]["data"];
+        $temperature = $sensorData[0]->sensordatavalues[0]->value;
+        $humidity = $sensorData[0]->sensordatavalues[1]->value;
+    }
 
-    echo "<br><br>";
-    echo "id: ". $sensorId . "<br>";
-    echo "time: ". $timestamp . "<br>";
-    echo "lon: ". $longitude . "<br>";
-    echo "lat: ". $latitude . "<br>";
-    echo "pres: ". $pressure . "<br>";
-    echo "temp: ". $temperature . "<br>";
-    echo "humi: " . $humidity .  "<br>";
-    echo "pm2.5: ". $pm25 . "<br>";
-    echo "pm10: ". $pm100 . "<br>";
-    echo "addr: ". $address . "<br>";
-    echo "city: ". $city . "<br>";
-    echo "cntry: ". $country . "<br><br><br><br><br>";
+    if (isset($sensorMap["BMP280"])) {
+        $sensorData = $sensorMap["BMP280"]["data"];
+        $temperature = $sensorData[0]->sensordatavalues[1]->value;
+        $pressure = number_format($sensorData[0]->sensordatavalues[2]->value / 100, 1);
+    }
+
+    if(isset($sensorMap["BME280"])){
+        $sensorData = $sensorMap["BME280"]["data"];
+        $temperature = $sensorData[0]->sensordatavalues[0]->value;
+        $humidity = $sensorData[0]->sensordatavalues[2]->value;
+        $pressure = number_format($sensorData[0]->sensordatavalues[3]->value/ 100, 1);
+    }
+
+    $stmt = $db->prepare("INSERT INTO sensor_data (sensor_id, time, longitude, latitude, temperature, humidity, pressure, pm25, pm100, address, city, country) VALUES (:sensor_id, :time, :longitude, :latitude, :temperature, :humidity, :pressure, :pm25, :pm100, :address, :city, :country)");
+
+    $stmt->bindParam(':sensor_id', $sensorId);
+    $stmt->bindParam(':time', $timestamp); //assuming $time equals $timestamp in your code
+    $stmt->bindParam(':longitude', $longitude);
+    $stmt->bindParam(':latitude', $latitude);
+    $stmt->bindParam(':temperature', $temperature);
+    $stmt->bindParam(':humidity', $humidity);
+    $stmt->bindParam(':pressure', $pressure);
+    $stmt->bindParam(':pm25', $pm25);
+    $stmt->bindParam(':pm100', $pm100);
+    $stmt->bindParam(':address', $address);
+    $stmt->bindParam(':city', $city);
+    $stmt->bindParam(':country', $country);
+    $stmt->execute();
+
+//    echo "<br><br>";
+//    echo "id: ". $sensorId . "<br>";
+//    echo "time: ". $timestamp . "<br>";
+//    echo "lon: ". $longitude . "<br>";
+//    echo "lat: ". $latitude . "<br>";
+//    echo "temp: ". $temperature . "<br>";
+//    echo "humi: " . $humidity .  "<br>";
+//    echo "pres: ". $pressure . "<br>";
+//    echo "pm2.5: ". $pm25 . "<br>";
+//    echo "pm10: ". $pm100 . "<br>";
+//    echo "addr: ". $address . "<br>";
+//    echo "city: ". $city . "<br>";
+//    echo "cntry: ". $country . "<br>";
 }
-
 
 
 
@@ -103,13 +110,21 @@ function getSensorTypes($sensorId, $latitude, $longitude)
         if (!empty($response) && strlen($response) !== 0) {
             $decodedResponse = json_decode($response);
             if (isset($decodedResponse[0]) && $decodedResponse[0]->location->longitude === $longitude && $decodedResponse[0]->location->latitude === $latitude) {
-                $types[] = ['type' => getSensorType($decodedResponse), 'id' => $sensorId + $i];
+                $types[] = ['type' => getSensorType($decodedResponse), 'id' => $sensorId + $i, 'data' => $decodedResponse];
             }
         }
     }
     return $types;
 }
 
+function createSensorMap($sensorsTypes)
+{
+    $map = [];
+    foreach($sensorsTypes as $sensor) {
+        $map[$sensor['type']] = $sensor;
+    }
+    return $map;
+}
 
 function getSensorType($jsonData)
 {
