@@ -1,5 +1,6 @@
 <?php
 $hostname = "localhost";
-$username = "phpmyadmin";
+$username = "xmucham1";
 $password = "s1lveRShad!e";
 $dbname = "bakalarka";
+$apiKey = "AIzaSyArgBywlIsUtMoLJmia5jZckXkkv362HZU";
