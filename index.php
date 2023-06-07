@@ -40,7 +40,7 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
             var endDate = document.getElementById('end-date').value;
 
             if (period === "fromUntil" && ((startDate === "" || endDate === "") || (startDate > endDate))) {
-                document.getElementById('day').checked = false;
+                document.getElementById('today').checked = false;
                 document.getElementById('week').checked = false;
                 document.getElementById('month').checked = false;
                 document.getElementById('fromUntil').checked = false;
@@ -65,9 +65,9 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
                     var dataArray = sensorData['<?php echo $sensor; ?>']['<?php echo $param; ?>'];
 
 
-                    if (period === 'day') {
+                    if (period === 'today') {
                         for (let i = 1; i < dataArray.length; i++) {
-                            dataArray[i][0] = parseInt(dataArray[i][0]);    // hour
+                            dataArray[i][0] = parseInt(dataArray[i][0]);
                         }
                     } else if (period === 'week' || period === 'month' || period === 'fromUntil') {
                         for (let i = 1; i < dataArray.length; i++) {
@@ -114,7 +114,7 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
             let endDate = document.getElementById('end-date').value;
 
             if (period === "fromUntil" && ((startDate === "" || endDate === "") || (startDate > endDate))) {
-                document.getElementById('day').checked = false;
+                document.getElementById('today').checked = false;
                 document.getElementById('week').checked = false;
                 document.getElementById('month').checked = false;
                 document.getElementById('fromUntil').checked = false;
@@ -151,31 +151,45 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
                                 unit = "µg/m3";
                                 break;
                         }
-                        comparedSensors.forEach(function (currentSensor) {
-                            sensor = currentSensor;
-                            var dataArray = sensorData[sensor][param];
 
-                            if (period === 'day') {
-                                for (let i = 1; i < dataArray.length; i++) {
-                                    dataArray[i][0] = parseInt(dataArray[i][0]);    // hour
-                                }
-                            } else if (period === 'week' || period === 'month' || period === 'fromUntil') {
-                                for (let i = 1; i < dataArray.length; i++) {
-                                    let dateParts = dataArray[i][0].split('-');
-                                    dataArray[i][0] = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-                                }
-                            }
+                        var sensorAddress = "";
+                        let promises = comparedSensors.map(function (currentSensor) {
+                            return $.ajax({
+                                url: 'getAddress.php',
+                                type: 'POST',
+                                data: {'sensor_id': currentSensor},
+                            })
+                                .then(function (address) {
+                                    let sensorAddress = address;
+                                    let dataArray = sensorData[currentSensor][param];
 
-                            if (completeData.length === 0) {
-                                completeData.push(...dataArray);
-                            } else {
-                                for (let i = 0; i < dataArray.length; i++) {
-                                    completeData[i].push(dataArray[i][1]);
-                                }
-                            }
-                            console.log(completeData);
+                                    if (period === 'today') {
+                                        for (let i = 1; i < dataArray.length; i++) {
+                                            dataArray[i][0] = parseInt(dataArray[i][0]);
+                                        }
+                                    } else if (period === 'week' || period === 'month' || period === 'fromUntil') {
+                                        for (let i = 1; i < dataArray.length; i++) {
+                                            let dateParts = dataArray[i][0].split('-');
+                                            dataArray[i][0] = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                                        }
+                                    }
+                                    if (completeData.length === 0) {
+                                        completeData.push(...dataArray);
+                                        dataArray[0][1] = sensorAddress;
+                                    } else {
+                                        completeData[0].push(sensorAddress);
+                                        for (let i = 1; i < dataArray.length; i++) {
+                                            completeData[i].push(dataArray[i][1]);
+                                        }
+                                    }
+                                })
+                                .catch(function (err) {
+                                    console.log("no sensor found");
+                                });
                         });
-                        drawChart(completeData, param + ' (' + unit + ')', 'chart_' + param);
+                        $.when.apply($, promises).then(function () {
+                            drawChart(completeData, param + ' (' + unit + ')', 'chart_' + param);
+                        });
                     });
                 })
                 .catch(function (error) {
@@ -220,7 +234,7 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
                         title: chartTitle
                     }
                 };
-            } else if (period === "day") {
+            } else if (period === "today") {
                 options = {
                     title: chartTitle,
                     curveType: 'function',
@@ -290,7 +304,7 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
 
             $('#sensor-data-form').submit(function (e) {
                 e.preventDefault();
-                document.getElementById('day').checked = false;
+                document.getElementById('today').checked = false;
                 document.getElementById('week').checked = false;
                 document.getElementById('month').checked = false;
                 document.getElementById('fromUntil').checked = true;
@@ -301,14 +315,13 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
                 e.preventDefault();
                 document.getElementById('start-date').value = "";
                 document.getElementById('end-date').value = "";
-                document.getElementById('day').checked = true;
+                document.getElementById('today').checked = true;
                 document.getElementById('week').checked = false;
                 document.getElementById('month').checked = false;
                 document.getElementById('fromUntil').checked = false;
                 drawCharts();
             });
 
-            // COMPARE STUFF
             var desiredParameters = [];
             var comparedSensors = [];
 
@@ -331,10 +344,10 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
                 document.getElementById("compareShow1").style.background = "red";
                 document.getElementById("compareShow2").style.background = "red";
                 makeCompareCharts(desiredParameters, comparedSensors);
-                desiredParameters.forEach(function (param) {  // Removed extra )
+                desiredParameters.forEach(function (param) {
                     var title = "chart_" + param;
                     document.getElementById(title).style.display = "none";
-                });  // Added missing closing parenthesis
+                });
                 desiredParameters = [];
                 comparedSensors = [];
                 drawCharts();
@@ -378,8 +391,8 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
 <body>
 <div id="menu" style="display: flex">
     <div id="menuMain" style="flex: 1">
-        <input type="radio" id="day" name="period" value="day" checked onclick="drawCharts()">
-        <label for="day">Day</label>
+        <input type="radio" id="today" name="period" value="today" checked onclick="drawCharts()">
+        <label for="today">Today</label>
 
         <input type="radio" id="week" name="period" value="week" onclick="drawCharts()">
         <label for="week">Week</label>
@@ -433,12 +446,15 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
 
 </div>
 <div id="defaultGraphsDiv">
+    <?php $count = 0; ?>
     <?php foreach ($sensors as $sensor): ?>
         <div class="sensor-row" style="outline: 2px solid royalblue; padding-top: 30px;padding-bottom: 20px;">
             <h3 style="font-size: x-large; display: flex; justify-content: center"><?php $sql = "SELECT city, address, country FROM sensor_data WHERE sensor_id='" . $sensor . "' LIMIT 1";
                 $address = $db->query($sql);
                 $address = $address->fetch(PDO::FETCH_ASSOC);
-                echo $address["city"] . " " . $address["address"] . ", " . $address["country"] ?></h3>
+                echo $count . ". " . $address["city"] . " " . $address["address"] . ", " . $address["country"];
+                $count++;
+                ?></h3>
             <?php foreach (['temperature', 'humidity', 'pressure', 'pm25', 'pm100'] as $param): ?>
                 <div class="chartDiv" id="chart_<?php echo $sensor . "_" . $param; ?>"
                      style="z-index: 3; border-radius: 25px; height: 35%; padding: 1px; margin-bottom: 60px; background: #ffffff; box-shadow: 0 0 40px rgb(59,162,246);"></div>
