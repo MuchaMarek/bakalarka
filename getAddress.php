@@ -14,7 +14,7 @@ try {
         if ($result["address"]) {
             echo $result["address"];
         } else {
-            echo "No address found for sensor ID: " . $sensorId;
+            echo "No address found for this sensor!";
         }
     }
 } catch (PDOException $e) {

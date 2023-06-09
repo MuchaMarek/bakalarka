@@ -324,13 +324,13 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
 
             var desiredParameters = [];
             var comparedSensors = [];
+            var locationList = [];
 
             $('#compareBtn').click(function (e) {
                 e.preventDefault();
                 desiredParameters = [];
                 comparedSensors = [];
                 document.getElementById("compareGraphsDiv").style.display = "block";
-                document.getElementById("defaultGraphsDiv").style.display = "none";
                 document.getElementById("popCompareMenu").style.display = "block";
                 document.getElementById("compareShow1").style.background = "green";
                 document.getElementById("compareShow2").style.background = "green";
@@ -363,6 +363,18 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
                     success: function (addedSensor) {
                         if (!comparedSensors.includes(addedSensor)) {
                             comparedSensors.push(addedSensor);
+                            $.ajax({
+                                url: 'getAddress.php',
+                                type: 'POST',
+                                data: {'sensor_id': addedSensor},
+                                success: function (address) {
+                                    $("#zoznamLokalit").append(address+"<br>");
+
+                                },
+                                error: function (err) {
+                                    console.log("no location found");
+                                }
+                            });
                         }
                     },
                     error: function (err) {
@@ -372,18 +384,25 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
             });
 
             $('#compareSubmit').click(function (e) {
+                document.getElementById("chart_temperature").style.display="none";
+                document.getElementById("chart_pressure").style.display="none";
+                document.getElementById("chart_pm25").style.display="none";
+                document.getElementById("chart_pm100").style.display="none";
+                document.getElementById("chart_humidity").style.display="none";
+
                 e.preventDefault();
+                document.getElementById("defaultGraphsDiv").style.display = "none";
                 desiredParameters = [];
                 $('#compareDiv input:checked').each(function () {
                     desiredParameters.push($(this).val().toLowerCase());
                 });
+
                 makeCompareCharts(desiredParameters, comparedSensors);
                 desiredParameters.forEach(function (param) {
                     var title = "chart_" + param;
                     document.getElementById(title).style.display = "block";
                 });
             });
-
         });
     </script>
 </head>
@@ -412,24 +431,26 @@ while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
         <div id="popCompareMenu" style="display:none;">
             <button id="clearCompareBtn">Turn off compare mode</button>
             <div id="sensorSelection">
-                <button id="addSensorBtn">Add Sensor</button>
+                <button id="addSensorBtn">Add index</button>
                 <input type="number" name="sensorIndex" id="sensorIndex" min="0">
             </div>
             <div id="compareDiv">
-                <input type="checkbox" id="temp" name="temp" value="Temperature">
+                <input type="checkbox" id="temperature" name="temp" value="Temperature">
                 <label for="temp">Temperature</label><br>
-                <input type="checkbox" id="pres" name="pres" value="Pressure">
+                <input type="checkbox" id="pressure" name="pres" value="Pressure">
                 <label for="pres">Pressure</label><br>
-                <input type="checkbox" id="pm25s" name="pm25s" value="PM25">
+                <input type="checkbox" id="pm25" name="pm25s" value="PM25">
                 <label for="pm25s">PM2.5</label><br>
-                <input type="checkbox" id="pm100s" name="pm100s" value="PM100">
+                <input type="checkbox" id="pm100" name="pm100s" value="PM100">
                 <label for="pm100s">PM10</label><br>
-                <input type="checkbox" id="humi" name="humi" value="Humidity">
+                <input type="checkbox" id="humidity" name="humi" value="Humidity">
                 <label for="humi">Humidity</label><br>
             </div>
             <button id="compareSubmit">Compare</button>
         </div>
     </div>
+
+    <div id="zoznamLokalit" style="flex: 1">Zoznam lokalít:<br></div>
 
     <div id="rangeDiv">
         <form id="sensor-data-form" onsubmit="event.preventDefault()" ;/>
