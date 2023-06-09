@@ -11,7 +11,8 @@ Steps for installation:
 -Nasledne si .zip extrahujete a uložíte na svoj server. 
 -Musíte si vytvoriť config.php, do ktorého si nastavíte prihlasovacie údaje do svojej databázy.
 -Na servery si musíte nastaviť CRON JOB, ktorý bude pravidelne spúštať kód parseData.php pre zber dát.
--V tomto bode by stránka mala fungovať
+-V súbore parseData.php si nastavte parameter $apiKey na riadku 9,  na svoj API klúč pre Google Maps 
+-V tomto bode by stránka mala fungovať 
 
 Modifikácia
 -Pre pridavanie senzorov, z ktorých chcete ťahať dáta, si musíte najsť senzor ID na mape OpenSenseMap
